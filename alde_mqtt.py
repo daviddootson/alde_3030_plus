@@ -147,7 +147,7 @@ def read_state(ser):
         cs   = response[8]
         if cs == lin_checksum_enhanced(ID_INFO, data):
             b3 = data[3]; b4 = data[4]; b5 = data[5]
-            wm = {0:'off', 1:'on', 2:'boost', 3:'boost'}
+            wm = {0:'off', 1:'on', 2:'boost', 3:'on'}
             return {
                 'zone1_temp':   round(data[0] * 0.5 - 42, 1),
                 'outdoor_temp': round(data[2] * 0.5 - 42, 1),
