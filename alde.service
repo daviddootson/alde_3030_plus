@@ -1,0 +1,17 @@
+[Unit]
+Description=Alde 3030 Plus MQTT Bridge
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=alde
+WorkingDirectory=/home/alde
+ExecStart=/usr/bin/python3 /home/alde/alde_mqtt.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
