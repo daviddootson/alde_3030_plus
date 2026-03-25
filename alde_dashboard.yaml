@@ -1,0 +1,190 @@
+title: Alde 3030 Plus
+path: alde
+icon: mdi:radiator
+cards:
+  - type: thermostat
+    entity: climate.alde_3030
+    name: Alde 3030 Plus
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: entities
+        title: Controls
+        entities:
+          - entity: switch.alde_gas
+            name: Gas
+            icon: mdi:gas-burner
+          - entity: select.alde_electric
+            name: Electric Power
+            icon: mdi:lightning-bolt
+          - entity: select.alde_water
+            name: Water Mode
+            icon: mdi:water-boiler
+      - type: grid
+        title: Status
+        columns: 1
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: binary_sensor.alde_pump
+            name: Pump
+            icon: mdi:pump
+            show_state: true
+            tap_action:
+              action: none
+            hold_action:
+              action: none
+            styles:
+              grid:
+                - grid-template-areas: '"i n" "i s"'
+                - grid-template-columns: 42px 1fr
+                - grid-template-rows: min-content min-content
+              card:
+                - padding: 10px 12px
+              icon:
+                - width: 26px
+              name:
+                - font-size: 18px
+                - font-weight: bold
+              state:
+                - font-size: 12px
+                - opacity: 0.7
+            state:
+              - value: "on"
+                styles:
+                  icon:
+                    - color: green
+              - value: "off"
+                styles:
+                  icon:
+                    - color: grey
+          - type: custom:button-card
+            entity: binary_sensor.alde_valve
+            name: Valve
+            icon: mdi:valve
+            show_state: true
+            tap_action:
+              action: none
+            hold_action:
+              action: none
+            styles:
+              grid:
+                - grid-template-areas: '"i n" "i s"'
+                - grid-template-columns: 42px 1fr
+                - grid-template-rows: min-content min-content
+              card:
+                - padding: 10px 12px
+              icon:
+                - width: 26px
+              name:
+                - font-size: 18px
+                - font-weight: bold
+              state:
+                - font-size: 12px
+                - opacity: 0.7
+            state:
+              - value: "on"
+                styles:
+                  icon:
+                    - color: green
+              - value: "off"
+                styles:
+                  icon:
+                    - color: grey
+          - type: custom:button-card
+            entity: binary_sensor.alde_error
+            name: Error
+            icon: mdi:alert-circle
+            show_state: true
+            tap_action:
+              action: none
+            hold_action:
+              action: none
+            styles:
+              grid:
+                - grid-template-areas: '"i n" "i s"'
+                - grid-template-columns: 42px 1fr
+                - grid-template-rows: min-content min-content
+              card:
+                - padding: 10px 12px
+              icon:
+                - width: 26px
+              name:
+                - font-size: 18px
+                - font-weight: bold
+              state:
+                - font-size: 12px
+                - opacity: 0.7
+            state:
+              - value: "on"
+                styles:
+                  icon:
+                    - color: red
+              - value: "off"
+                styles:
+                  icon:
+                    - color: grey
+          - type: custom:button-card
+            entity: binary_sensor.alde_ac
+            name: AC Sensor
+            icon: mdi:power-plug-outline
+            show_state: true
+            tap_action:
+              action: none
+            hold_action:
+              action: none
+            styles:
+              grid:
+                - grid-template-areas: '"i n" "i s"'
+                - grid-template-columns: 42px 1fr
+                - grid-template-rows: min-content min-content
+              card:
+                - padding: 10px 12px
+              icon:
+                - width: 26px
+              name:
+                - font-size: 18px
+                - font-weight: bold
+              state:
+                - font-size: 12px
+                - opacity: 0.7
+  - type: custom:apexcharts-card
+    update_delay: 3s
+    header:
+      show: true
+      title: Temperature History
+      show_states: true
+      colorize_states: true
+    graph_span: 24h
+    yaxis:
+      - decimals: 1
+    all_series_config:
+      unit: "°C"
+    series:
+      - entity: climate.alde_3030
+        attribute: current_temperature
+        name: Indoor
+        type: line
+        curve: smooth
+        stroke_width: 3
+        transform: return parseFloat(x);
+        group_by:
+          func: avg
+          duration: 1h
+      - entity: climate.alde_3030
+        attribute: temperature
+        name: Setpoint
+        type: line
+        curve: stepline
+        stroke_width: 2
+        transform: return parseFloat(x);
+      - entity: sensor.alde_outdoor
+        name: Outdoor
+        type: line
+        curve: smooth
+        stroke_width: 2
+        transform: return parseFloat(x);
+        group_by:
+          func: avg
+          duration: 20m
