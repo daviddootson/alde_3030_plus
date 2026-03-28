@@ -13,53 +13,7 @@ import serial
 import time
 import json
 import threading
-import datetime
 import paho.mqtt.client as mqtt
-
-LOG_FILE = '/home/alde/boost_log.txt'
-
-def log_boost_transition(direction, state):
-    """Log full frame data when bits3-4 change"""
-    ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    b3 = state['raw_b3']; b4 = state['raw_b4']; b5 = state['raw_b5']
-    wm_raw = (b5 >> 3) & 3
-    line = (
-        f"\n{'='*60}\n"
-        f"[WATER MODE DECODED FROM PANEL - bits3-4: {direction}] {ts}\n"
-        f"{'='*60}\n"
-        f"  Full frame (8 data bytes):\n"
-        f"  b[0]=0x{int((state['zone1_temp']+42)*2):02X}  "
-        f"b[1]=0xFE  "
-        f"b[2]=0x{int((state['outdoor_temp']+42)*2):02X}  "
-        f"b[3]=0x{b3:02X}  "
-        f"b[4]=0x{b4:02X}  "
-        f"b[5]=0x{b5:02X}  "
-        f"b[6]=0x00  b[7]=0x00\n"
-        f"\n"
-        f"  b[0] zone1:    {state['zone1_temp']}°C\n"
-        f"  b[1] zone2:    unused\n"
-        f"  b[2] outdoor:  {state['outdoor_temp']}°C\n"
-        f"  b[3] 0x{b3:02X} {b3:08b}: sp={(b3&0x3F)*0.5+5:.1f}°C  gas={(b3>>6)&1}  valve={(b3>>7)&1}\n"
-        f"  b[4] 0x{b4:02X} {b4:08b}: elec={(b4>>6)&3}kW\n"
-        f"  b[5] 0x{b5:02X} {b5:08b}:\n"
-        f"       bit0 panel_on={(b5>>0)&1}\n"
-        f"       bit1 busy    ={(b5>>1)&1}\n"
-        f"       bit2 error   ={(b5>>2)&1}\n"
-        f"       bit3 wm_low  ={(b5>>3)&1}\n"
-        f"       bit4 wm_high ={(b5>>4)&1}\n"
-        f"       bit5 ac_input={(b5>>5)&1}\n"
-        f"       bit6 ac_auto ={(b5>>6)&1}\n"
-        f"       bit7 pump    ={(b5>>7)&1}\n"
-        f"  bits3-4={wm_raw} → water_mode={state['water_mode']}\n"
-        f"  zone1={state['zone1_temp']}°C  sp={state['setpoint']}°C  "
-        f"outdoor={state['outdoor_temp']}°C  pump={state['pump_running']}\n"
-    )
-    print(line)
-    try:
-        with open(LOG_FILE, 'a') as f:
-            f.write(line)
-    except Exception as e:
-        print(f"[LOG] Failed to write log: {e}")
 
 # ── Serial ───────────────────────────────────────────────────────────────────
 PORT = '/dev/ttyAMA0'
@@ -333,50 +287,6 @@ def publish_discovery(client):
 def publish_state(client, state):
     mode = 'heat' if (state['gas_active'] or state['electric_kw'] > 0) else 'off'
 
-    # Log when water mode sent to HA changes
-    if state['water_mode'] != publish_state.last_water_mode:
-        ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        b3 = state['raw_b3']; b4 = state['raw_b4']; b5 = state['raw_b5']
-        wm_raw = (b5 >> 3) & 3
-        line = (
-            f"\n{'='*60}\n"
-            f"[WATER MODE SENT TO HA: {publish_state.last_water_mode} → {state['water_mode']}] {ts}\n"
-            f"{'='*60}\n"
-            f"  Full frame (8 data bytes):\n"
-            f"  b[0]=0x{int((state['zone1_temp']+42)*2):02X}  "
-            f"b[1]=0xFE  "
-            f"b[2]=0x{int((state['outdoor_temp']+42)*2):02X}  "
-            f"b[3]=0x{b3:02X}  "
-            f"b[4]=0x{b4:02X}  "
-            f"b[5]=0x{b5:02X}  "
-            f"b[6]=0x00  b[7]=0x00\n"
-            f"\n"
-            f"  b[0] zone1:    {state['zone1_temp']}°C\n"
-            f"  b[1] zone2:    unused\n"
-            f"  b[2] outdoor:  {state['outdoor_temp']}°C\n"
-            f"  b[3] 0x{b3:02X} {b3:08b}: sp={(b3&0x3F)*0.5+5:.1f}°C  gas={(b3>>6)&1}  valve={(b3>>7)&1}\n"
-            f"  b[4] 0x{b4:02X} {b4:08b}: elec={(b4>>6)&3}kW\n"
-            f"  b[5] 0x{b5:02X} {b5:08b}:\n"
-            f"       bit0 panel_on={(b5>>0)&1}\n"
-            f"       bit1 busy    ={(b5>>1)&1}\n"
-            f"       bit2 error   ={(b5>>2)&1}\n"
-            f"       bit3 wm_low  ={(b5>>3)&1}\n"
-            f"       bit4 wm_high ={(b5>>4)&1}\n"
-            f"       bit5 ac_input={(b5>>5)&1}\n"
-            f"       bit6 ac_auto ={(b5>>6)&1}\n"
-            f"       bit7 pump    ={(b5>>7)&1}\n"
-            f"  bits3-4={wm_raw} → water_mode={state['water_mode']}\n"
-            f"  zone1={state['zone1_temp']}°C  sp={state['setpoint']}°C  "
-            f"outdoor={state['outdoor_temp']}°C  pump={state['pump_running']}\n"
-        )
-        print(line)
-        try:
-            with open(LOG_FILE, 'a') as f:
-                f.write(line)
-        except Exception as e:
-            print(f"[LOG] Failed to write log: {e}")
-        publish_state.last_water_mode = state['water_mode']
-
     client.publish(CLIMATE_STATE, json.dumps({
         'current_temperature': state['zone1_temp'],
         'temperature':         state['setpoint'],
@@ -400,8 +310,6 @@ def publish_state(client, state):
     client.publish(VALVE_STATE,   'ON' if state['valve_open'] else 'OFF',  retain=True)
     client.publish(AC_STATE,      'ON' if state['ac_input'] else 'OFF',    retain=True)
     client.publish(ERROR_STATE,   'ON' if state['error'] else 'OFF',       retain=True)
-
-publish_state.last_water_mode = None
 
 # ── MQTT callbacks ────────────────────────────────────────────────────────────
 def on_connect(client, userdata, flags, rc):
@@ -511,8 +419,6 @@ def main():
         initial_state['valve_open'], initial_state['ac_input'],
     ) if initial_state else None
 
-    last_wm_raw = (initial_state['raw_b5'] >> 3) & 3 if initial_state else None
-
     try:
         while True:
             with cmd_lock:
@@ -566,14 +472,7 @@ def main():
                     state['valve_open'], state['ac_input'],
                 )
 
-                # Always track raw bits3-4 value
-                curr_wm_raw = (state['raw_b5'] >> 3) & 3
-
                 if key != last_published:
-                    # Log any change in bits3-4 raw value
-                    if last_wm_raw is not None and curr_wm_raw != last_wm_raw:
-                        log_boost_transition(f"bits3-4: {last_wm_raw}→{curr_wm_raw}", state)
-                    last_wm_raw = curr_wm_raw
                     publish_state(client, state)
                     last_published = key
                     print(f"[STATE] zone1={state['zone1_temp']}°C  "
