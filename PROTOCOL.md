@@ -1,6 +1,17 @@
-# Alde 3030 Plus CI-Bus Protocol Documentation
+# Alde 3030 Plus Protocol Documentation
 
-This document describes the reverse-engineered protocol used on the Alde 3030 Plus yellow CI-bus connector. This was determined through logic analyser captures and experimentation.
+This document describes the reverse-engineered protocols used on the Alde 3030 Plus. Two physical buses are documented:
+
+- **Yellow CI-bus** — the external RJ12 connector on the panel. Bidirectional; used for control and status.
+- **Red internal bus** — the internal RJ12 connector. Passive listen only; carries glycol and hot water temperatures.
+
+Both buses use LIN as their physical layer with enhanced checksum, but differ in baud rate, interface method, and frame content.
+
+---
+
+# Yellow CI-Bus
+
+This was determined through logic analyser captures and experimentation.
 
 ## Physical Layer
 
@@ -142,3 +153,110 @@ Zone 2 (b[1] of info frame) always returns 0xFE (zone unused) on single-zone ins
 
 ### Remote Control Panel Setting
 The panel has a "Remote Control" option in System Configuration. This does not need to be enabled for the integration to work. If enabled, the panel shows a "Remote control missing or not working" error — this is cosmetic only and does not block command acceptance.
+
+---
+
+# Red Internal Bus
+
+The red bus is the Alde panel's internal LIN bus, connecting the main controller board to the boiler/heat exchanger assembly. It carries real-time temperatures that are not available on the yellow CI-bus — specifically the glycol circuit temperature and the hot water tank temperature.
+
+This was determined through passive capture and byte-level analysis correlated against known temperature readings from the panel display.
+
+## Physical Layer
+
+- **Connector**: RJ12 6P6C (red connector on panel)
+- **Bus type**: LIN (Local Interconnect Network)
+- **Baud rate**: 9600 bps
+- **Format**: 8N1 (8 data bits, no parity, 1 stop bit)
+- **Pin 2**: GND
+- **Pin 4**: LIN bus signal
+- **Pin 5**: 12V supply
+
+> ⚠️ **Listen only.** The Pi never transmits on this bus. Only a passive receive connection is made via the second TJA1020 transceiver.
+
+## Interface Method
+
+The red bus cannot use the Pi's hardware UART (already occupied by the yellow bus). Instead, GPIO17 is used with the **pigpio bit-bang serial** interface, which provides software UART receive at 9600 baud.
+
+pigpio must be built from source on Debian 13 (Trixie) — the standard apt package does not work correctly on this OS version.
+
+## LIN Frame Structure
+
+Identical to the yellow bus:
+```
+BREAK + SYNC (0x55) + PROTECTED_ID + DATA + CHECKSUM
+```
+
+All frames observed on the red bus use **enhanced checksum** (includes the protected ID in the checksum calculation).
+
+## Frame 0x55 — Temperature Frame
+
+This is the only frame currently decoded. It is broadcast periodically by the boiler controller.
+
+- **Raw frame ID**: 0x15
+- **Protected ID (with parity bits)**: 0x55
+- **Data length**: 8 bytes
+- **Checksum**: Enhanced (includes protected ID 0x55)
+
+### Temperature Decode
+
+```python
+glycol_C    = (data[0] + data[1] * 256) / 10.0
+hot_water_C = (data[2] + data[3] * 256) / 10.0
+```
+
+Temperatures are encoded as a 16-bit little-endian integer, in units of 0.1°C.
+
+| Bytes | Field | Encoding | Confirmed |
+|-------|-------|----------|-----------|
+| b[0]–b[1] | Glycol temperature | `(b[0] + b[1]×256) / 10.0` °C | ✅ Verified against panel |
+| b[2]–b[3] | Hot water temperature | `(b[2] + b[3]×256) / 10.0` °C | ✅ Verified against panel |
+| b[4]–b[7] | Unknown | — | Not yet decoded |
+
+### Example
+
+Raw data bytes: `C4 01 3C 02 XX XX XX XX`
+
+```
+glycol    = (0xC4 + 0x01×256) / 10.0 = (196 + 256) / 10.0 = 45.2°C
+hot_water = (0x3C + 0x02×256) / 10.0 = (60 + 512)  / 10.0 = 57.2°C
+```
+
+### Sanity Ranges
+
+The production script applies the following sanity checks and silently discards frames outside these ranges:
+
+| Field | Valid Range |
+|-------|-------------|
+| Glycol temperature | 0.0°C – 120.0°C |
+| Hot water temperature | 0.0°C – 90.0°C |
+
+## Frame State Machine
+
+Because the red bus is captured via bit-bang (byte-by-byte), frames are reconstructed in software using a state machine. A gap of more than 10ms between bytes is treated as a frame boundary and resets the state machine to IDLE. This handles the LIN break field, which is not directly observable as a break via bit-bang — it manifests as a 0x00 byte.
+
+```
+IDLE
+  └─ on 0x00         → GOT_BREAK
+GOT_BREAK
+  └─ on 0x55         → GOT_SYNC
+  └─ on 0x00         → GOT_BREAK (stay — multiple break bytes)
+  └─ on other        → IDLE
+GOT_SYNC
+  └─ on any byte     → DATA (store as current_pid, reset buf)
+DATA
+  └─ accumulate bytes into buf
+  └─ on len(buf)==9  → process frame (8 data + 1 checksum), → IDLE
+  └─ on gap >10ms    → IDLE (frame boundary)
+```
+
+## Notes
+
+### Bytes b[4]–b[7]
+The remaining four bytes of the temperature frame have not yet been fully decoded. Candidates based on position and observed variation include flow rate, return temperature, or boiler status flags. Contributions welcome.
+
+### Relationship to Yellow Bus Water Mode
+The hot water temperature from the red bus is the sensor the panel uses internally when deciding whether to trigger a boost cycle in Auto water mode. Monitoring this value alongside the yellow bus `water_mode` field provides full visibility of the panel's auto heating logic.
+
+### Frame Rate
+The temperature frame is broadcast at approximately 100ms intervals. The production script only publishes to MQTT when a value changes, so MQTT traffic is low despite the high frame rate on the bus.

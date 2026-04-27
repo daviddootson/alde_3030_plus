@@ -1,0 +1,18 @@
+[Unit]
+Description=Alde 3030 Plus Red Bus MQTT Bridge
+After=network.target pigpiod.service
+Wants=network-online.target pigpiod.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=alde
+WorkingDirectory=/home/alde
+ExecStart=/usr/bin/python3 /home/alde/alde_red_bus_mqtt.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
