@@ -93,41 +93,17 @@ GitHub: `https://github.com/daviddootson/alde_3030_plus`
 
 ---
 
-## Current Fault (as of 2026-11-13)
+## Resolved Fault: Yellow Bus Unavailable (2026-11-13 → 2026-11-17)
 
-**Red bus is working. Yellow bus entities are unavailable in Home Assistant.**
+**Cause:** the yellow RJ12 plug was not fully seated in the heater's yellow socket. Re-seating it fixed it immediately.
 
-### What is known:
-- **Update 2026-11-17:** MQTT side is fine (connects, publishes discovery, receives HA commands). But the journal since 2026-11-13 has **zero** `[STATE]`/`[CMD]` lines and startup logs `WARNING: Could not read initial state` — the heater is not answering ID_INFO requests on the yellow LIN bus, so no state is published and commands are never sent. UART config checked OK (`/dev/serial0 -> ttyAMA0`, `disable-bt`, no serial console, `alde` in `dialout`). Next: check yellow bus wiring/transceiver/SLP pin and look at raw bytes on `/dev/ttyAMA0`.
-- `sudo systemctl status alde.service` shows the service **active and running** since 17:53 today
-- Only log entry is a harmless DeprecationWarning: `paho-mqtt Callback API version 1 is deprecated`
-- Service has been up 5+ hours without crashing
-- Red bus script on same Pi is publishing correctly to HA
+**Symptoms:** the service was active and MQTT worked (it connected, published discovery, and received HA commands), but startup logged `WARNING: Could not read initial state` and there were no `[STATE]` lines. Without a successful read, commands are never sent, so the yellow bus entities showed unavailable in HA.
 
-### Likely causes to investigate:
-1. **UART reassigned to Bluetooth** — a kernel/OS update may have broken the `/dev/ttyAMA0` assignment. Check `ls -la /dev/serial*` and `cat /boot/firmware/config.txt | grep uart`
-2. **MQTT not publishing** — script running but silently failing to send. Check with `mosquitto_sub -h homeassistant.local -t "alde/#" -u round -P "$MQTT_PASS"`
-3. **LIN bus not responding** — heater not sending frames, script stuck waiting. Check full logs with `sudo journalctl -u alde.service --since "17:53:00" --no-pager`
-4. **paho-mqtt version incompatibility** — the deprecation warning may indicate a breaking API change in a recent paho-mqtt update
-
-### Recommended first steps:
-```bash
-# Full logs since service start
-sudo journalctl -u alde.service --since "17:53:00" --no-pager
-
-# Check UART device
-ls -la /dev/serial* /dev/ttyAMA*
-
-# Check what's on the MQTT bus
-mosquitto_sub -h homeassistant.local -t "alde/#" -u round -P "$MQTT_PASS" -v &
-sleep 10
-kill %1
-
-# Check paho-mqtt version
-pip3 show paho-mqtt
-```
-
----
+**How it was diagnosed (useful if it happens again):**
+- Raw test with the service stopped: send break + `55 5B` on `/dev/ttyAMA0`. Getting back only the 3-byte echo `00 55 5B` and no reply means the Pi, UART and TJA1020 are fine and the break is between the transceiver's LIN pin and the heater.
+- The TJA1020 has an internal pull-up on its LIN pin, so the echo looks healthy even with the cable disconnected.
+- `sudo cat /proc/tty/driver/ttyAMA` with `rx == tx` and no `fe:`/`brk:` counters means the heater has sent nothing since boot.
+- Quick check: `sudo journalctl -u alde.service | grep -A1 "Reading initial"` should show a `zone1=...` line.
 
 ## Pi Setup Notes
 
