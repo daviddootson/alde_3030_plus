@@ -28,6 +28,8 @@ Robustness (mirrors alde_mqtt.py):
   - Designed to run under systemd (see alde_red_bus_mqtt.service)
 """
 
+import os
+import sys
 import pigpio
 import time
 import json
@@ -42,8 +44,11 @@ BAUD     = 9600
 # ── MQTT ──────────────────────────────────────────────────────────────────────
 MQTT_HOST   = 'homeassistant.local'
 MQTT_PORT   = 1883
-MQTT_USER   = 'round'
-MQTT_PASS   = 'Ilovetabsha1!'
+# Credentials come from the environment (systemd EnvironmentFile=/etc/alde/mqtt.env)
+MQTT_USER   = os.environ.get('MQTT_USER', 'round')
+MQTT_PASS   = os.environ.get('MQTT_PASS')
+if not MQTT_PASS:
+    sys.exit("[MQTT] MQTT_PASS not set - create /etc/alde/mqtt.env (see mqtt.env.example)")
 MQTT_CLIENT = 'alde_red_bus_mqtt'
 
 # ── Device (shared with yellow bus so sensors group together in HA) ────────────

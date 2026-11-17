@@ -232,29 +232,54 @@ git clone https://github.com/YOUR_USERNAME/alde-3030-ha.git .
 
 ### MQTT Configuration
 
-Edit both scripts and update the MQTT settings at the top of each file:
+#### Broker address
 
-**`alde_mqtt.py`:**
+The broker address is set at the top of both `alde_mqtt.py` and `alde_red_bus_mqtt.py`. Change it if your broker isn't at `homeassistant.local`:
+
 ```python
-MQTT_HOST = 'homeassistant.local'  # or your HA IP address
-MQTT_PORT = 1883
-MQTT_USER = 'your_mqtt_username'
-MQTT_PASS = 'your_mqtt_password'
+MQTT_HOST   = 'homeassistant.local'  # or your HA IP address
+MQTT_PORT   = 1883
 ```
 
-**`alde_red_bus_mqtt.py`:**
-```python
-MQTT_HOST = 'homeassistant.local'
-MQTT_PORT = 1883
-MQTT_USER = 'your_mqtt_username'
-MQTT_PASS = 'your_mqtt_password'
+#### Username and password
+
+The MQTT username and password are **not** stored in the scripts or in this repository. Both scripts read them from the environment variables `MQTT_USER` and `MQTT_PASS`, which systemd loads from one file on the Pi: **`/etc/alde/mqtt.env`**.
+
+Create that file from the template in this repo:
+
+```bash
+sudo mkdir -p /etc/alde
+sudo cp /home/alde/mqtt.env.example /etc/alde/mqtt.env
+sudo nano /etc/alde/mqtt.env
 ```
+
+Set your own credentials. Don't use quotes, even if the password has special characters:
+
+```ini
+MQTT_USER=your_mqtt_username
+MQTT_PASS=your_mqtt_password
+```
+
+Then make the file readable by root only. systemd reads it as root before starting the scripts, so the `alde` user doesn't need access:
+
+```bash
+sudo chown root:root /etc/alde/mqtt.env
+sudo chmod 600 /etc/alde/mqtt.env
+```
+
+- `MQTT_USER` is optional and defaults to `round` if it isn't set.
+- If `MQTT_PASS` isn't set, the script stops straight away with `MQTT_PASS not set - create /etc/alde/mqtt.env`. You'll see this in `journalctl`.
+- To change the password later, edit `/etc/alde/mqtt.env` and run `sudo systemctl restart alde.service alde_red_bus_mqtt.service`.
+
+> ⚠️ Never commit a real `mqtt.env`. The repo's `.gitignore` excludes it, and only `mqtt.env.example` (with a placeholder password) is tracked.
 
 ### Test the Connections
 
-Before setting up the services, test each script runs correctly:
+Before setting up the services, test that each script runs correctly. When you run a script by hand, systemd doesn't load `/etc/alde/mqtt.env` for you, so set the variables in your shell first. `read -s` keeps the password off the screen and out of your shell history:
 
 ```bash
+export MQTT_USER=your_mqtt_username
+read -rsp "MQTT password: " MQTT_PASS; echo; export MQTT_PASS
 python3 alde_mqtt.py
 ```
 
@@ -307,13 +332,16 @@ sudo nano /etc/systemd/system/alde.service
 Description=Alde 3030 Plus MQTT Bridge
 After=network.target
 Wants=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
 User=alde
 WorkingDirectory=/home/alde
+EnvironmentFile=/etc/alde/mqtt.env
+Environment=PYTHONUNBUFFERED=1
 ExecStart=/usr/bin/python3 /home/alde/alde_mqtt.py
-Restart=on-failure
+Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
@@ -339,6 +367,8 @@ StartLimitIntervalSec=0
 Type=simple
 User=alde
 WorkingDirectory=/home/alde
+EnvironmentFile=/etc/alde/mqtt.env
+Environment=PYTHONUNBUFFERED=1
 ExecStart=/usr/bin/python3 /home/alde/alde_red_bus_mqtt.py
 Restart=always
 RestartSec=10
@@ -350,6 +380,8 @@ WantedBy=multi-user.target
 ```
 
 > ℹ️ The red bus service declares `After=pigpiod.service` to ensure the pigpio daemon is ready before the script starts.
+
+> ℹ️ In both services, `EnvironmentFile=/etc/alde/mqtt.env` supplies the MQTT credentials (see [MQTT Configuration](#mqtt-configuration)). `PYTHONUNBUFFERED=1` makes the scripts' output appear in `journalctl` immediately instead of in delayed batches.
 
 ### Enable and Start Both Services
 

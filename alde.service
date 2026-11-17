@@ -8,6 +8,7 @@ StartLimitIntervalSec=0
 Type=simple
 User=alde
 WorkingDirectory=/home/alde
+EnvironmentFile=/etc/alde/mqtt.env
 Environment=PYTHONUNBUFFERED=1
 ExecStart=/usr/bin/python3 /home/alde/alde_mqtt.py
 Restart=always

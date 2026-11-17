@@ -98,6 +98,7 @@ GitHub: `https://github.com/daviddootson/alde_3030_plus`
 **Red bus is working. Yellow bus entities are unavailable in Home Assistant.**
 
 ### What is known:
+- **Update 2026-11-17:** MQTT side is fine (connects, publishes discovery, receives HA commands). But the journal since 2026-11-13 has **zero** `[STATE]`/`[CMD]` lines and startup logs `WARNING: Could not read initial state` — the heater is not answering ID_INFO requests on the yellow LIN bus, so no state is published and commands are never sent. UART config checked OK (`/dev/serial0 -> ttyAMA0`, `disable-bt`, no serial console, `alde` in `dialout`). Next: check yellow bus wiring/transceiver/SLP pin and look at raw bytes on `/dev/ttyAMA0`.
 - `sudo systemctl status alde.service` shows the service **active and running** since 17:53 today
 - Only log entry is a harmless DeprecationWarning: `paho-mqtt Callback API version 1 is deprecated`
 - Service has been up 5+ hours without crashing
@@ -135,10 +136,10 @@ pip3 show paho-mqtt
 - **Python packages:** `paho-mqtt`, `pigpio`, `pyserial`
 - **Scripts location:** `/home/alde/`
 - **Service files location:** `/etc/systemd/system/`
+- **MQTT credentials:** `/etc/alde/mqtt.env` (root:root, 600), loaded by both services via `EnvironmentFile=`. Template: `mqtt.env.example`. Never commit the real file or hardcode the password in scripts.
 - The `alde` user needs to be in the `dialout` group for UART access
 
 ## Known Issues / Future Work
 
-- `alde.service` uses `Restart=on-failure` — should be changed to `Restart=always` with `StartLimitIntervalSec=0` to match red bus service
 - Future: EcoFlow power monitoring integration
 - Future: Temperature-based automations combining red bus hot water temp with EcoFlow power data
