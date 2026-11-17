@@ -105,7 +105,7 @@ GitHub: `https://github.com/daviddootson/alde_3030_plus`
 
 ### Likely causes to investigate:
 1. **UART reassigned to Bluetooth** — a kernel/OS update may have broken the `/dev/ttyAMA0` assignment. Check `ls -la /dev/serial*` and `cat /boot/firmware/config.txt | grep uart`
-2. **MQTT not publishing** — script running but silently failing to send. Check with `mosquitto_sub -h homeassistant.local -t "alde/#" -u round -P Ilovetabsha1!`
+2. **MQTT not publishing** — script running but silently failing to send. Check with `mosquitto_sub -h homeassistant.local -t "alde/#" -u round -P "$MQTT_PASS"`
 3. **LIN bus not responding** — heater not sending frames, script stuck waiting. Check full logs with `sudo journalctl -u alde.service --since "17:53:00" --no-pager`
 4. **paho-mqtt version incompatibility** — the deprecation warning may indicate a breaking API change in a recent paho-mqtt update
 
@@ -118,7 +118,7 @@ sudo journalctl -u alde.service --since "17:53:00" --no-pager
 ls -la /dev/serial* /dev/ttyAMA*
 
 # Check what's on the MQTT bus
-mosquitto_sub -h homeassistant.local -t "alde/#" -u round -P Ilovetabsha1! -v &
+mosquitto_sub -h homeassistant.local -t "alde/#" -u round -P "$MQTT_PASS" -v &
 sleep 10
 kill %1
 
