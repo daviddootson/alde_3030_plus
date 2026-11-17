@@ -2,13 +2,15 @@
 Description=Alde 3030 Plus MQTT Bridge
 After=network.target
 Wants=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
 User=alde
 WorkingDirectory=/home/alde
+Environment=PYTHONUNBUFFERED=1
 ExecStart=/usr/bin/python3 /home/alde/alde_mqtt.py
-Restart=on-failure
+Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
